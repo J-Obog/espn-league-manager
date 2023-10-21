@@ -69,14 +69,14 @@ class ESPNFantasyClient:
             )
 
             sts = player["playerPoolEntry"]["player"]["injuryStatus"] 
-            
+
             players.append(
                 Player(
                     id=player["playerPoolEntry"]["player"]["id"],
                     team_id=player["playerPoolEntry"]["player"]["proTeamId"],
                     name=player["playerPoolEntry"]["player"]["fullName"],
                     slot=SlotType(player["lineupSlotId"]),
-                    eligible_slots=set(player["playerPoolEntry"]["player"]["eligibleSlots"]),
+                    eligible_slots=set([SlotType.get_or_none(slot) for slot in player["playerPoolEntry"]["player"]["eligibleSlots"]]),
                     injury_status=InjuryStatus(sts),
                     stats=PlayerStats(
                         projected_average_fp=get_projected_fp(stats_json_lst)

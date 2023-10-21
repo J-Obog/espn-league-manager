@@ -57,6 +57,14 @@ class SlotType(IntEnum):
     UTIL = 11
     BENCH = 12
 
+    @staticmethod
+    def get_or_none(slot: int) -> Optional[SlotType]:
+        try:
+            return SlotType(slot)
+        except:
+            return None
+
+
 @dataclass
 class Player:
     id: int
