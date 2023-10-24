@@ -88,16 +88,17 @@ class ESPNFantasyClient:
 
 
     def update_lineup(self, team_id: int, date: Date, changes: List[LineupChange]):
-        url = f"{ESPN_WRITES_URL}/{self.league_id}/transactions"
+        if len(changes) > 0:
+            url = f"{ESPN_WRITES_URL}/{self.league_id}/transactions"
 
-        id1 = scoring_period_id_by_date(date)
-        id2 = scoring_period_id_by_date(Date.curr_date())
+            id1 = scoring_period_id_by_date(date)
+            id2 = scoring_period_id_by_date(Date.curr_date())
 
-        roster_type = "ROSTER" if id1 == id2 else "FUTURE_ROSTER"
+            roster_type = "ROSTER" if id1 == id2 else "FUTURE_ROSTER"
 
-        b = {"teamId":team_id,"type":roster_type,"scoringPeriodId":id1,"executionType":"EXECUTE","items":[]}
-        
-        for change in changes:
-            b["items"].append({"playerId":change.player_id,"type":"LINEUP","toLineupSlotId":change.to_slot.value})
+            b = {"teamId":team_id,"type":roster_type,"scoringPeriodId":id1,"executionType":"EXECUTE","items":[]}
             
-        check_response(self.sess.post(url, json=b))
+            for change in changes:
+                b["items"].append({"playerId":change.player_id,"type":"LINEUP","toLineupSlotId":change.to_slot.value})
+                
+            check_response(self.sess.post(url, json=b))

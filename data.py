@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum, IntEnum
 from typing import Optional, List, Set
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 class InjuryStatus(StrEnum):
     ACTIVE = "ACTIVE"
@@ -37,6 +37,16 @@ class Date:
         d1 = date(end.year, end.month, end.day)
         delta = d1 - d0
         return delta.days
+    
+    def add_days(self, days: int):
+        dt = datetime(month=self.month, day=self.day, year=self.year)
+        dt = dt + timedelta(days=days)
+        self.month = dt.month
+        self.day = dt.day
+        self.year = dt.year
+    
+    def str_just_date(self) -> str:
+        return f"{self.month}-{self.day}-{self.year}"
 
 @dataclass
 class PlayerRating:
