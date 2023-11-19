@@ -23,7 +23,7 @@ def get_projected_fp(stat_json: List[dict[str, any]]) -> float:
     for s in stat_json:
         if s["statSourceId"] == 1 and s["statSplitTypeId"] == 0:
          return s["appliedAverage"]
-    raise "Some error"
+    return 0.0 # TODO: use current season stats if projected is not available 
 
 class ESPNFantasyClient:
     def __init__(self, espn_s2_cookie: str, league_id: int):
@@ -69,6 +69,7 @@ class ESPNFantasyClient:
             )
 
             sts = player["playerPoolEntry"]["player"]["injuryStatus"] 
+            print(player["playerPoolEntry"]["player"]["fullName"])
 
             players.append(
                 Player(

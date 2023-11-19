@@ -5,6 +5,9 @@ name = "pypi"
 
 [packages]
 python-dotenv = "*"
+redis = "*"
+requests = "*"
+python-dateutil = "*"
 
 [dev-packages]
 
