@@ -1,6 +1,5 @@
-import time
 from requests import Session, Response
-from data import InjuryStatus, Player, Date, LineupChange, Game, PlayerRating, PlayerStats, SlotType
+from data import InjuryStatus, Player, LineupChange, Game, PlayerStats, SlotType
 from typing import List
 from dateutil.parser import parse
 from datetime import datetime
@@ -8,14 +7,10 @@ from datetime import datetime
 ESPN_READS_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/2024/segments/0/leagues"
 ESPN_WRITES_URL = "https://lm-api-writes.fantasy.espn.com/apis/v3/games/fba/seasons/2024/segments/0/leagues"
 ESPN_GAMES_URL = "https://site.api.espn.com/apis/fantasy/v2/games/fba/games"
-LEAGUE_START_DATE = Date.just_date(10, 24, 2023) 
+LEAGUE_START_DATE = datetime(month=10, day=24, year=2023)
 
-def scoring_period_id_by_date(date: Date) -> int:
-    delt = Date.days_delta(LEAGUE_START_DATE, date)
-    return 1 if delt < 0 else delt + 1
-
-def get_scoring_period(date: Date) -> int:
-    delt = Date.days_delta(LEAGUE_START_DATE, date)
+def get_scoring_period(date: datetime) -> int:
+    delt = (date - LEAGUE_START_DATE).days
     return 1 if delt < 0 else delt + 1
 
 def check_response(res: Response) -> Response:
@@ -38,13 +33,13 @@ class ESPNFantasyClient:
         self.sess.headers["Cache-Control"] = "no-cache"
 
     def get_games(self, date: datetime) -> List[Game]:
-        q = {"useMap": True, "dates": datetime.strftime("%Y/%m/%d"), "pbpOnly":True}
+        q = {"useMap": True, "dates": date.strftime("%Y/%m/%d"), "pbpOnly":True}
         events = check_response(self.sess.get(ESPN_GAMES_URL, params=q)).json()["events"]
 
         return [Game(evt["competitors"][0]["id"], evt["competitors"][1]["id"], parse(evt["date"])) for evt in events]
 
 
-    def get_lineup(self, team_id: int, date: Date) -> List[Player]:
+    def get_lineup(self, team_id: int, date: datetime) -> List[Player]:
         q = {"forTeamId": team_id, "scoringPeriodId": get_scoring_period(date), "view":"mRoster"}
         teams = check_response(self.sess.get(f"{ESPN_READS_URL}/{self.league_id}", params=q)).json()["teams"]
         roster = list(filter(lambda team: team["id"] == team_id, teams))[0]["roster"]["entries"]
@@ -75,10 +70,10 @@ class ESPNFantasyClient:
         return players
 
 
-    def update_lineup(self, team_id: int, date: Date, changes: List[LineupChange]):
+    def update_lineup(self, team_id: int, date: datetime, changes: List[LineupChange]):
         if len(changes) > 0:
             id1 = get_scoring_period(date)
-            id2 = get_scoring_period(Date.curr_date())
+            id2 = get_scoring_period(datetime.now())
 
             b = {
                 "teamId": team_id,
