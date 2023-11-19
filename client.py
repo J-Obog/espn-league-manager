@@ -3,6 +3,7 @@ from requests import Session, Response
 from data import InjuryStatus, Player, Date, LineupChange, Game, PlayerRating, PlayerStats, SlotType
 from typing import List
 from dateutil.parser import parse
+from datetime import datetime
 
 ESPN_READS_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/2024/segments/0/leagues"
 ESPN_WRITES_URL = "https://lm-api-writes.fantasy.espn.com/apis/v3/games/fba/seasons/2024/segments/0/leagues"
@@ -10,6 +11,10 @@ ESPN_GAMES_URL = "https://site.api.espn.com/apis/fantasy/v2/games/fba/games"
 LEAGUE_START_DATE = Date.just_date(10, 24, 2023) 
 
 def scoring_period_id_by_date(date: Date) -> int:
+    delt = Date.days_delta(LEAGUE_START_DATE, date)
+    return 1 if delt < 0 else delt + 1
+
+def get_scoring_period(date: Date) -> int:
     delt = Date.days_delta(LEAGUE_START_DATE, date)
     return 1 if delt < 0 else delt + 1
 
@@ -32,44 +37,26 @@ class ESPNFantasyClient:
         self.sess.cookies["espn_s2"] = espn_s2_cookie
         self.sess.headers["Cache-Control"] = "no-cache"
 
-    def get_games(self, date: Date) -> List[Game]:
-        mm = str(date.month) if date.month >= 10 else f"0{date.month}"
-        dd = str(date.day) if date.day >= 10 else f"0{date.day}"
+    def get_games(self, date: datetime) -> List[Game]:
+        q = {"useMap": True, "dates": datetime.strftime("%Y/%m/%d"), "pbpOnly":True}
+        events = check_response(self.sess.get(ESPN_GAMES_URL, params=q)).json()["events"]
 
-        url = f"{ESPN_GAMES_URL}"
-        q = {"useMap": True, "dates": f"{date.year}{mm}{dd}", "pbpOnly":True}
-        res = check_response(self.sess.get(url, params=q)).json()
-        events_json = res["events"]
+        return [Game(evt["competitors"][0]["id"], evt["competitors"][1]["id"], parse(evt["date"])) for evt in events]
 
-        games = []
-
-        for event_json in events_json:
-            dt = parse(event_json["date"])
-
-            games.append(Game(
-                  team_a_id=event_json["competitors"][0]["id"],
-                  team_b_id=event_json["competitors"][1]["id"],
-                  date=Date(month=dt.month, day=dt.day, year=dt.year, hour=dt.hour, minute=dt.minute)
-             ))
-
-        return games
 
     def get_lineup(self, team_id: int, date: Date) -> List[Player]:
-        url = f"{ESPN_READS_URL}/{self.league_id}"
-        spid = scoring_period_id_by_date(date)
+        q = {"forTeamId": team_id, "scoringPeriodId": get_scoring_period(date), "view":"mRoster"}
+        teams = check_response(self.sess.get(f"{ESPN_READS_URL}/{self.league_id}", params=q)).json()["teams"]
+        roster = list(filter(lambda team: team["id"] == team_id, teams))[0]["roster"]["entries"]
 
-        q = {"forTeamId": team_id, "scoringPeriodId": spid, "view":"mRoster"}
-        res = check_response(self.sess.get(url, params=q)).json()
-        roster_json = list(filter(lambda tj: tj["id"] == team_id, res["teams"]))[0]["roster"]["entries"]
         players = []
 
-        for player in roster_json:
+        for player in roster:
             stats_json_lst = sorted(
                 player["playerPoolEntry"]["player"]["stats"], key=lambda j: j["seasonId"], reverse=True
             )
 
             sts = player["playerPoolEntry"]["player"]["injuryStatus"] 
-            print(player["playerPoolEntry"]["player"]["fullName"])
 
             players.append(
                 Player(
@@ -90,16 +77,15 @@ class ESPNFantasyClient:
 
     def update_lineup(self, team_id: int, date: Date, changes: List[LineupChange]):
         if len(changes) > 0:
-            url = f"{ESPN_WRITES_URL}/{self.league_id}/transactions"
+            id1 = get_scoring_period(date)
+            id2 = get_scoring_period(Date.curr_date())
 
-            id1 = scoring_period_id_by_date(date)
-            id2 = scoring_period_id_by_date(Date.curr_date())
+            b = {
+                "teamId": team_id,
+                "type": "ROSTER" if id1 == id2 else "FUTURE_ROSTER",
+                "scoringPeriodId": id1,
+                "executionType": "EXECUTE",
+                "items":[{"playerId":change.player_id,"type":"LINEUP","toLineupSlotId":change.to_slot.value} for change in changes]
+            }
 
-            roster_type = "ROSTER" if id1 == id2 else "FUTURE_ROSTER"
-
-            b = {"teamId":team_id,"type":roster_type,"scoringPeriodId":id1,"executionType":"EXECUTE","items":[]}
-            
-            for change in changes:
-                b["items"].append({"playerId":change.player_id,"type":"LINEUP","toLineupSlotId":change.to_slot.value})
-                
-            check_response(self.sess.post(url, json=b))
+            check_response(self.sess.post(f"{ESPN_WRITES_URL}/{self.league_id}/transactions", json=b))
